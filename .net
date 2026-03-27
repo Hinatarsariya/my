@@ -1,0 +1,529 @@
+---------------------------------------
+website.controller
+
+using external1_Batch_1.Models;
+using Microsoft.AspNetCore.Mvc;
+using System.Data;
+using System.Data.SqlClient;
+using System.Security.Cryptography;
+
+
+namespace external1_Batch_1.Controllers
+{
+    
+    public class websiteController : Controller
+    {
+        SqlConnection con = new SqlConnection("Data Source=(LocalDB)\\MSSQLLocalDB;AttachDbFilename=C:\\Users\\Admin\\Documents\\external1_Batch_1.mdf;Integrated Security=True;Connect Timeout=30");
+        SqlCommand cmd =new SqlCommand();
+        SqlDataAdapter da = new SqlDataAdapter();
+        DataTable dt = new DataTable();
+        public IActionResult Index()
+        {
+            return View();
+        }
+        [HttpGet]
+        public IActionResult login()
+        {
+            return View();
+        }
+        [HttpPost]
+        public IActionResult login(customer c)
+        {
+            con.Open();
+
+            dt=new DataTable();
+
+            da = new SqlDataAdapter("select *from customer where email='" + c.email + "' and password='" + c.password + "'", con);
+            da.Fill(dt);
+
+            if(dt.Rows.Count > 0 )
+            {
+                int cid = Convert.ToInt32(dt.Rows[0]["cid"]);
+                string cname = dt.Rows[0]["cname"].ToString();
+
+                HttpContext.Session.SetInt32("customer_id", cid);
+
+                Response.Cookies.Append("customer_name", cname, new CookieOptions
+                {
+                    Expires = DateTime.Now.AddMinutes(60),
+                    IsEssential = true,
+                    HttpOnly = true
+                });
+
+                return RedirectToAction("welcome");
+            }
+            else
+            {
+                ViewBag.error = "Invalid Username Password";
+                return RedirectToAction("login");
+            }
+
+                return View();
+        }
+        public IActionResult welcome()
+        {
+            if(!Request.Cookies.TryGetValue("customer_name",out string cname))
+            {
+                return RedirectToAction("login");
+            }
+            ViewBag.customer_name = cname;
+                return View();
+        }
+
+
+        public IActionResult display_product()
+        {
+            con.Open();
+
+            dt = new DataTable();
+
+            da = new SqlDataAdapter("select *from product", con);
+            da.Fill(dt);
+
+            if(dt.Rows.Count > 0 )
+            {
+                return View(dt);
+            }
+            return View();
+        }
+
+        public IActionResult order_page(int pid)
+        {
+            con.Open();
+
+            dt = new DataTable();
+
+            da = new SqlDataAdapter("select *from product where pid="+pid+"", con);
+            da.Fill(dt);
+
+            if (dt.Rows.Count > 0)
+            {
+                return View(dt);
+            }
+            return View();
+        }
+        [HttpPost]
+        public IActionResult order_page(int pid,int quantity)
+        {
+            con.Open();
+
+            dt = new DataTable();
+
+            int cid = Convert.ToInt32(HttpContext.Session.GetInt32("customer_id"));
+
+            cmd = new SqlCommand("insertorder", con);
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.AddWithValue("@cid", cid);
+            cmd.Parameters.AddWithValue("@pid", pid);
+            cmd.Parameters.AddWithValue("@quantity", quantity);
+
+            cmd.ExecuteNonQuery();
+            return RedirectToAction("myorder");
+        }
+
+        public IActionResult myorder()
+        {
+
+            int cid = Convert.ToInt32(HttpContext.Session.GetInt32("customer_id"));
+
+
+            con.Open();
+            dt = new DataTable();
+
+            da = new SqlDataAdapter("gettotal", con);
+            da.SelectCommand.CommandType = CommandType.StoredProcedure;
+
+            da.SelectCommand.Parameters.AddWithValue("@cid", cid);
+
+            da.Fill(dt);
+
+            int totalamount = Convert.ToInt32(dt.Rows[0]["total"]);
+            ViewBag.totalamount = totalamount;
+            con.Close();
+
+
+            con.Open();
+
+            dt = new DataTable();
+
+
+
+            da = new SqlDataAdapter("select *from orders where cid=" + cid + "", con);
+            da.Fill(dt);
+
+            if (dt.Rows.Count > 0)
+            {
+                return View(dt);
+            }
+            con.Close();
+            return View();
+           
+        }
+
+        public IActionResult update(int oid,int pid)
+        {
+            HttpContext.Session.SetInt32("order_id", oid);
+            return View();
+        }
+        [HttpPost]
+        public IActionResult update(int quantity)
+        {
+            con.Open();
+
+            dt = new DataTable();
+
+            int oid = Convert.ToInt32(HttpContext.Session.GetInt32("order_id"));
+
+            cmd = new SqlCommand("update", con);
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.AddWithValue("@oid", oid);
+            cmd.Parameters.AddWithValue("@quantity", quantity);
+
+            cmd.ExecuteNonQuery();
+            return RedirectToAction("myorder");
+
+            return View();
+        }
+
+        public IActionResult delete(int oid)
+        {
+            con.Open();
+
+
+            cmd = new SqlCommand("deleteorder", con);
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.AddWithValue("@oid", oid);
+           
+
+            cmd.ExecuteNonQuery();
+            return RedirectToAction("myorder");
+        }
+
+
+
+        public IActionResult logout()
+        {
+            HttpContext.Session.Clear();
+            return RedirectToAction("login");
+        }
+    }
+}
+---------------------------------------------------------------
+login.cshtml
+
+@using System.Data
+@using external1_Batch_1.Models
+@model DataTable
+
+<h3>@ViewBag.error</h3>
+
+<html>
+    <head></head>
+
+        <body>
+            <form action="login" method="post">
+                E-Mail :
+                <input type="text" name="email" />
+                <br/>
+
+                Password :
+                <input type="password" name="password" />
+                <br/>
+
+                <input type="submit" name="login" value="login" />
+            </form>
+        </body>
+</html>
+---------------------------------------------------------
+welcome.cshtml
+
+@using System.Data
+@using external1_Batch_1.Models
+@model DataTable
+
+<center><h1>@ViewBag.customer_name</h1></center>
+
+<center>
+<button><a asp-action="display_product" asp-controller="website">products</a></button>
+<button><a asp-action="myorder" asp-controller="website">My Orders</a></button>
+</center>
+
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+<center><a asp-action="logout" asp-controller="website">logout</a></center>
+---------------------------------------------------------------
+
+display_product.cshtml
+
+@using System.Data
+@using external1_Batch_1.Models
+@model DataTable
+
+
+<center>
+    <h3>Products</h3>
+</center>
+
+
+<hr/>
+
+<html>
+
+    <head></head>
+
+    <body>
+
+        <table border="3" class="table table-bordered table-striped table-hover">
+
+            <tr>
+                @foreach(DataColumn dc in Model.Columns)
+                {
+                    <th>@dc.ColumnName</th>
+                }
+                <th>Action</th>
+        </tr>
+
+
+        @foreach(DataRow dr in Model.Rows)
+        {
+            <tr>
+
+                <td>@dr[0]</td>
+                 <td>@dr[1]</td>
+                <td>@dr[2]</td>
+                <td>@dr[3]</td>
+                <td>@dr[4]</td>
+                <td>@dr[5]</td>
+
+                <td>
+                    @if(Convert.ToInt32(@dr[4])>0 && @dr[5].ToString()=="True")
+                    {
+                        <a asp-action="order_page" asp-controller="website" asp-route-pid="@dr[0]">Order Now</a>
+                    }
+                </td>
+            </tr>
+        }
+
+
+
+        </table>
+    </body>
+</html>
+---------------------------------------------------------------
+
+
+order_page.cshtml
+
+
+@using System.Data
+@using external1_Batch_1.Models
+@model DataTable
+
+
+<center>
+    <h3>Place Order</h3><br/>
+</center>
+
+
+<hr />
+
+<html>
+
+<head>
+</head>
+
+<body>
+
+    <table border="3" class="table table-bordered table-striped table-hover">
+
+        <tr>
+            @foreach (DataColumn dc in Model.Columns)
+            {
+                <th>@dc.ColumnName</th>
+            }
+            
+        </tr>
+
+
+        @foreach (DataRow dr in Model.Rows)
+        {
+            <tr>
+
+                <td>@dr[0]</td>
+                <td>@dr[1]</td>
+                <td>@dr[2]</td>
+                <td>@dr[3]</td>
+                <td>@dr[4]</td>
+                <td>@dr[5]</td>
+
+               
+            </tr>
+        }
+
+
+
+    </table>
+   
+    <br/><br/>
+    <form asp-action="order_page" method="post">
+        <input type="hidden" name="pid" value="@Model.Rows[0][0]" />
+
+        Quantity :
+        <input type="number" name="quantity" />
+        <br/>
+
+        <br/>
+        <input type="submit" name="Place Order" value="Place Order" />
+    </form>
+</body>
+</html>
+---------------------------------------------------------------
+myorder.cshtml
+
+@using System.Data
+@using external1_Batch_1.Models
+@model DataTable
+
+
+<center>
+    <h3>My Orders</h3>
+</center>
+
+
+<hr/>
+
+<html>
+
+    <head></head>
+
+    <body>
+
+        <table border="3" class="table table-bordered table-striped table-hover">
+
+            <tr>
+                @foreach(DataColumn dc in Model.Columns)
+                {
+                    <th>@dc.ColumnName</th>
+                }
+                <th>Action</th>
+            <th>Action</th>
+        </tr>
+
+
+        @foreach(DataRow dr in Model.Rows)
+        {
+            <tr>
+
+                <td>@dr[0]</td>
+                 <td>@dr[1]</td>
+                <td>@dr[2]</td>
+                <td>@dr[3]</td>
+                <td>@dr[4]</td>
+                <td> <a asp-action="update" asp-controller="website" asp-route-oid="@dr[0]">update</a> </td>
+                <td>  <a asp-action="delete" asp-controller="website" asp-route-oid="@dr[0]">delete</a> </td>
+            </tr>
+        }
+
+
+
+        </table>
+    </body>
+</html>
+
+        <h2>"Total Amount :"+@ViewBag.totalamount</h2>
+---------------------------------------------------------------
+update.cshtml
+
+@using System.Data
+@using external1_Batch_1.Models
+@model DataTable
+
+
+<html>
+<head>
+</head>
+
+<body>
+    <form action="update" method="post">
+       
+        Quantity :
+        <input type="number" name="quantity" />
+
+        <input type="submit" name="update" value="update" />
+    </form>
+</body>
+</html>
+---------------------------------------------------------------
+
+CREATE TABLE [dbo].[customer]
+(
+	[cid] INT NOT NULL PRIMARY KEY IDENTITY, 
+    [cname] VARCHAR(50) NULL, 
+    [mobile] INT NULL, 
+    [email] VARCHAR(50) NULL, 
+    [password] VARCHAR(50) NULL, 
+    [city] VARCHAR(50) NULL
+)
+
+
+CREATE TABLE [dbo].[orders]
+(
+	[oid] INT NOT NULL PRIMARY KEY IDENTITY, 
+    [cid] INT NULL, 
+    [pid] INT NULL, 
+    [date] DATETIME2 NULL, 
+    [quantity] INT NULL
+)
+
+
+CREATE TABLE [dbo].[product]
+(
+	[pid] INT NOT NULL PRIMARY KEY IDENTITY, 
+    [pname] VARCHAR(50) NULL, 
+    [brand] VARCHAR(50) NULL, 
+    [price] INT NULL, 
+    [stock] INT NULL, 
+    [isActive] BIT NULL
+)
+
+----------------------------------------------------------
+CREATE PROCEDURE [dbo].[insertorder]
+	@cid int,
+	@pid int,
+	@quantity int
+AS
+	insert into orders(cid,pid,date,quantity) values(@cid,@pid,GETDATE(),@quantity);
+RETURN 0
+
+----------------------------------------------------------
+CREATE PROCEDURE [dbo].[update]
+	@oid int,
+	@quantity int
+AS
+	update orders set quantity=@quantity where oid=@oid;
+RETURN 0
+
+----------------------------------------------------------
+CREATE PROCEDURE [dbo].[deleteorder]
+	@oid int
+AS
+	delete from orders where oid=@oid;
+RETURN 0
+
+----------------------------------------------------------
+CREATE PROCEDURE [dbo].[gettotal]
+	@cid int
+AS
+	SELECT sum(price*quantity) as total from orders o
+	join product p on o.pid=p.pid where o.cid=@cid;
+RETURN 0
