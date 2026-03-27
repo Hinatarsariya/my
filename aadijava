@@ -1,0 +1,124 @@
+import java.sql.*;
+import java.util.Scanner;
+
+class InvalidDataException extends Exception{
+    InvalidDataException(String msg){
+        super(msg);
+    }
+}
+
+class movieCRUD{
+    public static void main(String[]args){
+        Scanner sc = new Scanner(System.in);
+        
+        try{
+            Connection con=DriverManager.getConnection("jdbc:mysql://localhost/movie","root","");
+            int choice;
+            do{
+                System.out.println("\n1. Insert\n2. Display\n3. Update\n4. Delete\n5. Search\n6. Exit");
+                System.out.println("Enter choice");
+                choice = sc.nextInt();
+                
+                switch(choice)
+                {
+                    case 1:
+                        System.out.println("Enter Movie ID: ");
+                        int id = sc.nextInt();
+                        sc.nextLine();
+                        
+                        System.out.println("Enter Movie Name: ");
+                        String name = sc.nextLine();
+                        
+                        if(id<=0){
+                            throw new InvalidDataException("Id must be > 0");
+                        }
+                        
+                        if(name.isEmpty()){
+                            throw new InvalidDataException("Name cant be empty");
+                        }
+                        
+                        PreparedStatement ps = con.prepareStatement("INSERT INTO movie VALUES(?,?)");
+                        ps.setInt(1, id);
+                        ps.setString(2, name);
+                        
+                        ps.executeUpdate();
+                        
+                        System.out.println("Inserted Successfully");
+                        break;
+                        
+                     case 2:
+                         Statement stmt = con.createStatement();
+                         ResultSet rs = stmt.executeQuery("SELECT * FROM movie");
+                         
+                         while(rs.next()){
+                             System.out.println(rs.getInt(1)+" "+rs.getString(2));
+                         }
+                         break;
+                         
+                     case 3:
+                        System.out.println("Enter ID to update");
+                        int uid= sc.nextInt();
+                        sc.nextLine();
+                        
+                        System.out.println("Enter new Movie NAme");
+                        String newName=sc.nextLine();
+          
+                        PreparedStatement ps2 = con.prepareStatement("UPDATE movie SET name=? WHERE id=?");
+                        ps2.setString(1,newName);
+                        ps2.setInt(2, uid);
+                        ps2.executeUpdate();
+                        
+                     System.out.println("Updated Successfully");
+                     break;
+                     
+                     case 4:
+                         System.out.println("Enter ID to delete");
+                     int did=sc.nextInt();
+                     
+                     PreparedStatement ps3 =con.prepareStatement("DELETE FROM movie WHERE id=?");
+                     ps3.setInt(1, did);
+                     ps3.executeUpdate();
+                     
+                      System.out.println("Deleted Successfully");
+                        break;
+
+                     // 🔍 SEARCH
+                     case 5:
+                        System.out.println("Enter Movie ID to search:");
+                        int sid = sc.nextInt();
+
+                        PreparedStatement ps4 = con.prepareStatement("SELECT * FROM movie WHERE id=?");
+                        ps4.setInt(1, sid);
+
+                        ResultSet rs2 = ps4.executeQuery();
+
+                        if(rs2.next()){
+                            System.out.println("Movie Found:");
+                            System.out.println(rs2.getInt(1)+" "+rs2.getString(2));
+                        } else {
+                            System.out.println("Movie not found");
+                        }
+                        break;
+                        
+                     // ❌ EXIT LAST
+                     case 6:
+                         System.out.println("Exit");
+                         break;
+                         
+                     default:
+                         System.out.println("Invalid choice");
+                }
+                
+            }
+            while(choice!=6);   // 👈 change here
+            
+            sc.close();
+        }
+        catch(InvalidDataException e){
+            System.out.println("User Exception:"+e.getMessage()); 
+        }
+        catch (Exception e) {
+            System.out.println("Error: " + e);
+        }
+    }
+}
