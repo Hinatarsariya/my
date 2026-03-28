@@ -1,0 +1,289 @@
+using System.Data;
+using System.Data.SqlClient;
+
+SqlConnection con = new SqlConnection("C:\\USERS\\DELL\\DOCUMENTS\\TOURTRAVELDB.MDF");
+SqlCommand cmd = new SqlCommand();
+SqlDataAdapter adapter = new SqlDataAdapter();
+DataTable dt = new DataTable();
+
+
+
+public IActionResult login(string email, string password)
+{
+    con.Open();
+    adapter = new SqlDataAdapter("select * from Customer where Email_Id = '" + email + "' and Password = '" + password + "'", con);
+    adapter.Fill(dt);
+    if (dt.Rows.Count > 0)
+    {
+        HttpContext.Session.SetString("email", email);
+        HttpContext.Session.SetString("password", password);
+        HttpContext.Session.SetInt32("customerid", (int)Convert.ToInt32(dt.Rows[0]["Customer_Id"]));
+        //ViewBag.msg = "Valid User.";
+        return RedirectToAction("displaytourpackage");
+    }
+    else
+    {
+        ViewBag.msg = "Invalid Credentials.";
+        return View();
+    }
+}
+
+
+--------------------------------------------------------
+
+public IActionResult logout()
+{
+    HttpContext.Session.Clear();
+    return RedirectToAction("login");
+}
+
+--------------------------------------------------------
+public IActionResult displaytourpackage()
+{
+    con.Open();
+    adapter = new SqlDataAdapter("select * from Tour", con);
+    adapter.Fill(dt);
+    if (dt.Rows.Count > 0)
+    {
+        return View(dt);
+    }
+    else
+    {
+        return View();
+    }
+}
+
+--------------------------------------------------------
+
+public IActionResult searchtourpackage()
+{
+    return View();
+}
+
+[HttpPost]
+public IActionResult searchtourpackage(int minday, int maxday)
+{
+    con.Open();
+    cmd = new SqlCommand("SearchTourPackage", con);
+    cmd.CommandType = CommandType.StoredProcedure;
+    cmd.Parameters.AddWithValue("@minday", minday);
+    cmd.Parameters.AddWithValue("@maxday", maxday);
+    adapter = new SqlDataAdapter(cmd);
+    adapter.Fill(dt);
+    if (dt.Rows.Count > 0)
+    {
+        return View("searchresult", dt);
+    }
+    else
+    {
+        return View();
+    }
+}
+
+public IActionResult searchresult()
+{
+    return View();
+}
+--------------------------------------------------------
+ public IActionResult booktour(int tourid)
+ {
+     ViewBag.tourid = tourid;
+     return View();
+ }
+ [HttpPost]
+ public IActionResult booktour(int tourid, int person)
+ {
+     int customerid = (int)(HttpContext.Session.GetInt32("customerid"));
+     con.Open();
+     adapter = new SqlDataAdapter("select Price from Tour where Tour_Id = " + tourid + "", con);
+     adapter.Fill(dt);
+     int price = (int)(dt.Rows[0]["Price"]);
+     int amt = person * price;
+     cmd = new SqlCommand("InsertBookingDetails", con);
+     cmd.CommandType = CommandType.StoredProcedure;
+     cmd.Parameters.AddWithValue("@customerid", customerid);
+     cmd.Parameters.AddWithValue("@tourid", tourid);
+     cmd.Parameters.AddWithValue("@person", person);
+     cmd.Parameters.AddWithValue("@amount", amt);
+     cmd.ExecuteNonQuery();
+     cmd = new SqlCommand("update Tour set Is_Available = 'no' where Tour_Id = " + tourid + "", con);
+     cmd.ExecuteNonQuery();
+     adapter = new SqlDataAdapter("select * from Tour", con);
+     adapter.Fill(dt);
+     if (dt.Rows.Count > 0)
+     {
+         return RedirectToAction("displaytourpackage", dt);
+     }
+     else
+     {
+         return View();
+     }
+     con.Close();
+ }
+
+--------------------------------------------------------
+login.cshtml:
+<html>
+<head>
+	<title>Login Page</title>
+</head>
+<body>
+	<h1>Login</h1>
+	<br />
+	<form method="post" asp-action="login">
+		<div>
+			<label>Email : </label>
+			<input type="text" name="email" value="" asp-action="email" class="form-control" />
+		</div><br />
+		<div>
+			<label>Password : </label>
+			<input type="password" name="password" value="" asp-action="password" class="form-control" />
+		</div><br>
+		<div>
+			<input type="submit" name="submit" value="Login" class="form-control" />
+		</div><br />
+	</form>
+	@if (ViewBag.msg != null)
+	{
+		<h4>@ViewBag.msg</h4>
+	}
+</body>
+</html>
+
+--------------------------------------------------------
+displayourtourpackage.cshtml:
+
+@using System.Data;
+@model DataTable;
+
+<html>
+<head>
+	<title>Tour Packages</title>
+</head>
+<body>
+	<h1>Tour Packages</h1>
+	<br />
+	<table class="table table-bordered">
+		<thead>
+			@foreach (DataColumn dataColumn in Model.Columns)
+			{
+			<th>@dataColumn</th>
+		}
+		</thead>
+		@foreach (DataRow dataRow in Model.Rows)
+		{
+			<tr>
+				<td>@dataRow[0]</td>
+				<td>@dataRow[1]</td>
+				<td>@dataRow[2]</td>
+				<td>@dataRow[3]</td>
+				<td>@dataRow[4]</td>
+				<td>@dataRow[5]</td>
+			</tr>
+		}
+	</table>
+	<br />
+	<a asp-controller="Travel" asp-action="searchtourpackage">Search Tour Package</a>
+	<br />
+	<br />
+	<a asp-controller="Travel" asp-action="logout">Logout</a>
+	<br />
+</body>
+</html>
+
+--------------------------------------------------------
+booktour.cshtml:
+
+<html>
+<head>
+	<title>Book Tour</title>
+</head>
+<body>
+	<h1>Book a Tour</h1>
+	<br />
+	<form method="post" asp-action="booktour">
+		<input type="hidden" name="tourid" value="@ViewBag.tourid" />
+		<div>
+			<label>Enter total no of person : </label>
+			<input type="number" name="person" value="" class="form-control" />
+		</div><br />
+		<div>
+			<input type="submit" name="submit" value="Book" class="form-control" />
+		</div>
+	</form>
+	<br />
+	<br />
+	<a asp-controller="Travel" asp-action="logout">Logout</a>
+	<br />
+</body>
+</html>
+--------------------------------------------------------
+searchresult.cshtml:
+
+@using System.Data;
+@model DataTable;
+
+<html>
+<head>
+	<title>Search Result</title>
+</head>
+<body>
+	<h1>Search Result</h1>
+	<br />
+	<table class="table table-bordered">
+		<thead>
+			@foreach (DataColumn dataColumn in Model.Columns)
+			{
+			<th>@dataColumn</th>
+		}
+		</thead>
+		@foreach (DataRow dataRow in Model.Rows)
+		{
+			<tr>
+				<td>@dataRow[0]</td>
+				<td>@dataRow[1]</td>
+				<td>@dataRow[2]</td>
+				<td>@dataRow[3]</td>
+				<td>@dataRow[4]</td>
+				<td>@dataRow[5]</td>
+				<td>
+					<a asp-controller="Travel" asp-action="booktour" asp-route-tourid="@dataRow[0]">Book Tour</a>
+				</td>
+			</tr>
+		}
+	</table>
+	<br />
+	<br />
+	<a asp-controller="Travel" asp-action="logout">Logout</a>
+	<br />
+</body>
+</html>
+=================================================
+searchtourpackage.cshtml:
+
+ <html>
+<head>
+	<title>Search Tour Package</title>
+</head>
+<body>
+	<h1>Search Tour Package</h1>
+	<br />
+	<form method="post" asp-action="searchtourpackage">
+		<div>
+			<label>Enter duration : </label><br /><br />
+			<label>Minimum Days : </label>
+			<input type="number" name="minday" value="" class="form-control" /><br />
+			<label>Maximum Days : </label>
+			<input type="number" name="maxday" value="" class="form-control" /><br />
+		</div>
+		<div>
+			<input type="submit" name="submit" value="Search" class="form-control" />
+		</div>
+	</form>
+	<br />
+	<br />
+	<a asp-controller="Travel" asp-action="logout">Logout</a>
+	<br />
+</body>
+</html>
+---------------------------------------------------------
